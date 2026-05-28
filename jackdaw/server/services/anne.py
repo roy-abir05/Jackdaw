@@ -54,3 +54,64 @@ class AnneEngine:
                 "summary": "Anne is offline resting at Nassau. Log unavailable.",
                 "insight": f"Check your configuration keys or local LLM engine status. Details: {str(e)}"
             }
+        
+    @staticmethod
+    def write_sql(user_question: str, schema_data: list) -> str:
+        """
+        Translates a natural language question into Coral SQL using Schema Injection.
+        """
+        config = ConfigManager.load_config()
+        ai_config = config.get("ai", {})
+        
+        # Pull the user's active GitHub target so the AI knows what to query
+        gh_config = config.get("sources", {}).get("github", {})
+        gh_owner = gh_config.get("owner", "withcoral")
+        gh_repo = gh_config.get("repo", "coral")
+        
+        client = OpenAI(
+            api_key=ai_config.get("api_key", "dummy-key"),
+            base_url=ai_config.get("base_url", "https://api.groq.com/openai/v1")
+        )
+
+        prompt = f"""
+        You are 'Anne', an expert SQL data analyst.
+        Translate the user's question into a single, valid Coral SQL query.
+        
+        CRITICAL SCHEMA KNOWLEDGE (USE ONLY THESE COLUMNS):
+        1. `stripe.charges`
+           - Columns: `id`, `amount` (in cents), `customer` (customer ID, e.g., cus_123), `created` (unix timestamp), `description`.
+           - Note: Divide amount by 100.0 to get USD.
+        
+        2. `stripe.customers`
+           - Columns: `id`, `name`, `email`, `created`.
+           - Note: Join with stripe.charges ON stripe.charges.customer = stripe.customers.id
+           
+        3. `github.commits`
+           - Columns: `sha` (commit hash), `commit__author__name`, `commit__author__date`, `commit__message`.
+           - CRITICAL RULE: Every query to github.commits MUST include exactly: 
+             WHERE owner = '{gh_owner}' AND repo = '{gh_repo}'
+        
+        USER QUESTION: "{user_question}"
+        
+        RULES:
+        1. Output ONLY the raw SQL query. No explanations, no greetings.
+        2. Do NOT wrap the output in markdown (do NOT use ```sql).
+        3. Always use LIMIT 15 to prevent terminal overflow.
+        """
+
+        try:
+            response = client.chat.completions.create(
+                model=ai_config.get("model", "llama-3.3-70b-versatile"),
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0, # 0.0 is critical for code generation!
+            )
+            
+            sql = response.choices[0].message.content.strip()
+            # Failsafe cleanup just in case the LLM ignores the markdown rule
+            sql = sql.replace("```sql", "").replace("```", "").strip()
+            return sql
+            
+        except Exception as e:
+            return f"-- Error generating SQL: {str(e)}"
