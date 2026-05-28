@@ -1,11 +1,88 @@
 import os
+import tomllib
 from pathlib import Path
 
-# Target file: ~/.jackdaw/config.toml
-CONFIG_DIR = Path.home() / ".jackdaw"
-CONFIG_FILE = CONFIG_DIR / "config.toml"
+class ConfigManager:
+    BASE_DIR = Path.home() / ".jackdaw"
+    CONFIG_FILE = BASE_DIR / "config.toml"
+    PROMPTS_DIR = BASE_DIR / "prompts"
+    SCHEMAS_DIR = BASE_DIR / "schemas"
 
-DEFAULT_CONFIG_TEMPLATE = """[jackdaw]
+    @classmethod
+    def ensure_directories_exist(cls):
+        """Creates the dotfile architecture if it doesn't exist."""
+        cls.BASE_DIR.mkdir(parents=True, exist_ok=True)
+        cls.PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
+        cls.SCHEMAS_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Generate default config if missing
+        if not cls.CONFIG_FILE.exists():
+            cls._write_default_user_config()
+            
+        # Generate a default system prompt if missing
+        default_prompt = cls.PROMPTS_DIR / "system.txt"
+        if not default_prompt.exists():
+            default_prompt.write_text(
+                "You are 'Anne', an expert SQL data analyst. Output ONLY valid Coral SQL. "
+                "Do NOT use markdown wrapping. Always use LIMIT 15 unless specified. NEVER use SELECT *."
+            )
+
+    @classmethod
+    def load_user_space(cls) -> dict:
+        """Parses the main config.toml for API keys and target workspaces."""
+        if not cls.CONFIG_FILE.exists():
+            return {}
+        try:
+            with open(cls.CONFIG_FILE, "rb") as f:
+                return tomllib.load(f)
+        except Exception as e:
+            print(f"[Error parsing user config: {e}]")
+            return {}
+
+    @classmethod
+    def load_prompts(cls) -> dict:
+        """Scans the prompts directory and loads all .txt files into a dictionary."""
+        prompts = {}
+        if not cls.PROMPTS_DIR.exists():
+            return prompts
+            
+        for filepath in cls.PROMPTS_DIR.glob("*.txt"):
+            try:
+                prompts[filepath.stem] = filepath.read_text().strip()
+            except Exception:
+                pass
+        return prompts
+
+    @classmethod
+    def load_schemas(cls) -> dict:
+        """Scans the schemas directory and loads all .toml source maps."""
+        schemas = {}
+        if not cls.SCHEMAS_DIR.exists():
+            return schemas
+            
+        for filepath in cls.SCHEMAS_DIR.glob("*.toml"):
+            try:
+                with open(filepath, "rb") as f:
+                    # Keyed by filename (e.g., 'stripe.toml' -> schemas['stripe'])
+                    schemas[filepath.stem] = tomllib.load(f)
+            except Exception:
+                pass
+        return schemas
+
+    @classmethod
+    def get_full_context(cls) -> dict:
+        """Returns the fully assembled modular configuration state."""
+        cls.ensure_directories_exist()
+        return {
+            "user": cls.load_user_space(),
+            "prompts": cls.load_prompts(),
+            "schemas": cls.load_schemas()
+        }
+
+    @classmethod
+    def _write_default_user_config(cls):
+        """Generates the decoupled target architecture for user space."""
+        default_toml = """[jackdaw]
 port = 4242
 
 [ai]
@@ -13,44 +90,11 @@ api_key = "YOUR_LLM_API_KEY_HERE"
 base_url = "https://api.groq.com/openai/v1"
 model = "llama-3.3-70b-versatile"
 
-[sources.github]
+# Workspaces allow decoupling an owner from a single repository.
+# You can define multiple workspaces to quickly switch contexts.
+[workspaces.default]
+platform = "github"
 owner = "withcoral"
 repo = "coral"
-
-[prompts]
-system_sql = '''You are 'Anne', an expert SQL data analyst. Translate the user's question into a single, valid Coral SQL query.
-RULES:
-1. Output ONLY the raw SQL query. No explanations.
-2. Do NOT wrap the output in markdown (do NOT use ```sql).
-3. Always use LIMIT 15 to prevent terminal overflow.
-4. NEVER use SELECT *. Always explicitly select 3 to 5 relevant columns.'''
-
-[schema.stripe]
-charges = "Columns: id, amount (in cents), customer (ID), created, description. Note: Divide amount by 100.0 for USD."
-customers = "Columns: id, name, email, created. Note: Join with stripe.charges ON stripe.charges.customer = stripe.customers.id"
-
-[schema.github]
-commits = "Columns: sha, commit__author__name, commit__author__date, commit__message. RULE: MUST include WHERE owner = '{gh_owner}' AND repo = '{gh_repo}'"
 """
-
-class ConfigManager:
-    @staticmethod
-    def ensure_config_exists():
-        """Creates the ~/.jackdaw/config.toml file if it doesn't exist."""
-        if not CONFIG_DIR.exists():
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        
-        if not CONFIG_FILE.exists():
-            with open(CONFIG_FILE, "w") as f:
-                f.write(DEFAULT_CONFIG_TEMPLATE)
-            print(f"Initialized default configuration at {CONFIG_FILE}")
-
-    @staticmethod
-    def load_config() -> dict:
-        """Reads the TOML configuration file cleanly."""
-        ConfigManager.ensure_config_exists()
-        
-        # We use standard parsing; using tomllib (Python 3.11+) or a simple manual fallback
-        import tomllib
-        with open(CONFIG_FILE, "rb") as f:
-            return tomllib.load(f)
+        cls.CONFIG_FILE.write_text(default_toml)
