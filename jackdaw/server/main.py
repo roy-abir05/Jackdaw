@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from jackdaw.server.routes import test_data, health  # Import the new route
+from jackdaw.server.routes import test_data, health, log
+from jackdaw.config import ConfigManager
+
+ConfigManager.ensure_config_exists()
 
 app = FastAPI(title="Jackdaw Local Server")
 
@@ -14,3 +17,4 @@ app.add_middleware(
 
 app.include_router(test_data.router)
 app.include_router(health.router)
+app.include_router(log.router)
