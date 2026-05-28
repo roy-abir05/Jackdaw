@@ -7,4 +7,12 @@ requires-python = ">=3.14"
 dependencies = [
     "fastapi[standard]>=0.136.3",
     "openai>=2.38.0",
+    "rich>=15.0.0",
 ]
+
+[project.scripts]
+jackdaw = "jackdaw.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
