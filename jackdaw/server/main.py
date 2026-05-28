@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from jackdaw.server.routes import test_data
+from jackdaw.server.routes import test_data, health  # Import the new route
 
 app = FastAPI(title="Jackdaw Local Server")
 
-# Allow the Next.js frontend (running on port 3000 during dev) to hit this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"], 
@@ -13,9 +12,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include your new route
 app.include_router(test_data.router)
-
-@app.get("/api/health")
-def health_check():
-    return {"status": "Jackdaw is sailing"}
+app.include_router(health.router)
