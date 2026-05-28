@@ -32,3 +32,16 @@ class QueryEngine:
             github_repo=gh_config.get("repo", "coral")
         )
         return run_query(sql)
+    
+    @staticmethod
+    def get_code_to_cash_metrics():
+        """Executes the cross-source join between GitHub and Stripe."""
+        config = ConfigManager.load_config()
+        gh_config = config.get("sources", {}).get("github", {})
+        
+        sql = QueryEngine._load_sql_file(
+            "code_to_cash.sql", 
+            github_owner=gh_config.get("owner", "withcoral"), 
+            github_repo=gh_config.get("repo", "coral")
+        )
+        return run_query(sql)

@@ -6,11 +6,12 @@ router = APIRouter()
 
 @router.get("/api/log/today")
 def get_captains_log():
-    raw_data = QueryEngine.get_daily_snapshot()
-    ai_analysis = AnneEngine.generate_captains_log(raw_data)
+
+    unified_data = QueryEngine.get_code_to_cash_metrics()
+    ai_analysis = AnneEngine.generate_captains_log(unified_data)
     
     return {
         "status": "success",
-        "data": raw_data,
+        "data": unified_data,
         "ai_analysis": ai_analysis
     }
