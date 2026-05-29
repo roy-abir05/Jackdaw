@@ -1,19 +1,18 @@
 import os
 import tomllib
 from pathlib import Path
+from jackdaw.schemas import BUNDLED_SCHEMAS
 
 class ConfigManager:
     BASE_DIR = Path.home() / ".jackdaw"
     CONFIG_FILE = BASE_DIR / "config.toml"
     PROMPTS_DIR = BASE_DIR / "prompts"
-    SCHEMAS_DIR = BASE_DIR / "schemas"
 
     @classmethod
     def ensure_directories_exist(cls):
         """Creates the dotfile architecture if it doesn't exist."""
         cls.BASE_DIR.mkdir(parents=True, exist_ok=True)
         cls.PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
-        cls.SCHEMAS_DIR.mkdir(parents=True, exist_ok=True)
 
         # Generate default config if missing
         if not cls.CONFIG_FILE.exists():
@@ -54,29 +53,25 @@ class ConfigManager:
         return prompts
 
     @classmethod
-    def load_schemas(cls) -> dict:
-        """Scans the schemas directory and loads all .toml source maps."""
-        schemas = {}
-        if not cls.SCHEMAS_DIR.exists():
-            return schemas
-            
-        for filepath in cls.SCHEMAS_DIR.glob("*.toml"):
-            try:
-                with open(filepath, "rb") as f:
-                    # Keyed by filename (e.g., 'stripe.toml' -> schemas['stripe'])
-                    schemas[filepath.stem] = tomllib.load(f)
-            except Exception:
-                pass
-        return schemas
-
-    @classmethod
     def get_full_context(cls) -> dict:
         """Returns the fully assembled modular configuration state."""
         cls.ensure_directories_exist()
+        user_config = cls.load_user_space()
+        
+        active_schemas = {}
+        secrets = user_config.get("secrets", {})
+        
+        active_ws_name = user_config.get("jackdaw", {}).get("active_workspace", "default")
+        active_platform = user_config.get("workspaces", {}).get(active_ws_name, {}).get("platform")
+        
+        for spec_name, schema_rules in BUNDLED_SCHEMAS.items():
+            if spec_name in secrets or spec_name == active_platform:
+                active_schemas[spec_name] = schema_rules
+
         return {
-            "user": cls.load_user_space(),
+            "user": user_config,
             "prompts": cls.load_prompts(),
-            "schemas": cls.load_schemas()
+            "schemas": active_schemas
         }
 
     @classmethod

@@ -28,6 +28,46 @@ repo = "{gh_repo}"
 """
         ConfigManager.CONFIG_FILE.write_text(base_config)
         return True
+    
+    @classmethod
+    def manage_specs(cls):
+        """Interactive selector to manage API keys for bundled schemas."""
+        # The bundled specs your binary currently supports
+        SUPPORTED_SPECS = {
+            "1": {"name": "github", "desc": "GitHub (Requires Personal Access Token)"},
+            "2": {"name": "stripe", "desc": "Stripe (Requires Secret Key)"}
+        }
+        
+        while True:
+            console.print("\n[bold cyan]Manage Schema Connections[/bold cyan]")
+            for key, spec in SUPPORTED_SPECS.items():
+                console.print(f"  [{key}] {spec['name'].capitalize()} - {spec['desc']}")
+            console.print("  [q] Quit")
+            
+            choice = Prompt.ask("\nSelect a connector to add/update, or 'q' to quit", choices=["1", "2", "q"])
+            
+            if choice == 'q':
+                break
+                
+            selected_spec = SUPPORTED_SPECS[choice]["name"]
+            
+            action = Prompt.ask(
+                f"Do you want to (a)dd/update or (r)emove the {selected_spec.capitalize()} connection?", 
+                choices=["a", "r"], 
+                default="a"
+            ).lower()
+            
+            if action == 'a':
+                api_key = Prompt.ask(f"Enter your {selected_spec.capitalize()} API Key", password=True)
+                
+                with open(ConfigManager.CONFIG_FILE, "a") as f:
+                    f.write(f"\n[secrets.{selected_spec}]\napi_key = \"{api_key}\"\n")
+                
+                console.print(f"[bold green]✔ Added {selected_spec} credentials to config.[/bold green]")
+                
+
+            elif action == 'r':
+                console.print(f"[yellow]⚠ To completely remove {selected_spec}, open ~/.jackdaw/config.toml and delete its [secrets.{selected_spec}] block.[/yellow]")
 
     @classmethod
     def run_cli_wizard(cls):
