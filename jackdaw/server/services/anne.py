@@ -10,10 +10,11 @@ class AnneEngine:
         using the LLM provider designated in the local configuration.
         """
         # Load user configurations dynamically
-        config = ConfigManager.load_config()
-        ai_config = config.get("ai", {})
+        config = ConfigManager.get_full_context()
         
-        # Spin up our flexible OpenAI-compatible client
+        user_config = config.get("user", {})
+        ai_config = user_config.get("ai", {})
+        
         client = OpenAI(
             api_key=ai_config.get("api_key", "dummy-key"),
             base_url=ai_config.get("base_url", "https://api.groq.com/openai/v1")
@@ -60,13 +61,16 @@ class AnneEngine:
         """
         Translates a natural language question into Coral SQL dynamically using the config dotfiles.
         """
-        config = ConfigManager.load_config()
-        ai_config = config.get("ai", {})
-        gh_config = config.get("sources", {}).get("github", {})
+        config = ConfigManager.get_full_context()
         
-        system_sql_prompt = config.get("prompts", {}).get("system_sql", "Output only valid SQL.")
+        user_config = config.get("user", {})
+        ai_config = user_config.get("ai", {})
+        gh_config = user_config.get("workspaces", {}).get(user_config.get("jackdaw", {}).get("active_workspace", "default"), {})
         
-        schema_rules = config.get("schema", {})
+        system_sql_prompt = config.get("prompts", {}).get("system", "Output only valid SQL.")
+        
+        # FIX 1: "schemas" must be plural to match ConfigManager
+        schema_rules = config.get("schemas", {})
         injected_schema = ""
         
         for source, tables in schema_rules.items():
@@ -79,7 +83,8 @@ class AnneEngine:
 
         client = OpenAI(
             api_key=ai_config.get("api_key", "dummy-key"),
-            base_url=ai_config.get("base_url", "[https://api.groq.com/openai/v1](https://api.groq.com/openai/v1)")
+            # FIX 2: Stripped the markdown link formatting
+            base_url=ai_config.get("base_url", "https://api.groq.com/openai/v1")
         )
 
         final_prompt = f"""
