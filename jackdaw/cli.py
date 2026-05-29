@@ -7,6 +7,7 @@ from jackdaw.server.services.query_engine import QueryEngine
 from jackdaw.server.services.anne import AnneEngine
 from tui.log_renderer import LogRenderer
 from jackdaw.config import ConfigManager
+from jackdaw.installer import JackdawInstaller
 
 console = Console()
 
@@ -50,10 +51,8 @@ def main():
     args = parser.parse_args()
 
     if args.command == "log":
-        # ... (keep your existing log logic here) ...
         print("Gathering intel from Coral and Anne... (this takes a few seconds)")
         try:
-            ConfigManager.ensure_config_exists()
             data = QueryEngine.get_code_to_cash_metrics()
             
             if isinstance(data, dict) and "error" in data:
@@ -67,27 +66,27 @@ def main():
 
     elif args.command == "ask":
         console.print("[dim]Analyzing schema and consulting Anne...[/dim]")
-        ConfigManager.ensure_config_exists()
+        ConfigManager.ensure_directories_exist()
         
-        # 1. Get the current schema
         schema = QueryEngine.get_active_schema()
         
-        # 2. Ask Anne to write the SQL
         generated_sql = AnneEngine.write_sql(args.question, schema)
         
         if generated_sql.startswith("-- Error"):
             console.print(f"[bold red]{generated_sql}[/bold red]")
             sys.exit(1)
             
-        # 3. Execute the SQL
         console.print("[dim]Executing query...[/dim]\n")
         results = QueryEngine.execute_raw_sql(generated_sql)
         
-        # 4. Render the results
         render_dynamic_table(results, generated_sql)
 
     elif args.command == "init":
-        print("Init flow coming next!")
+        try:
+            JackdawInstaller.run_cli_wizard()
+        except KeyboardInterrupt:
+            print("\nInitialization aborted.")
+            sys.exit(1)
     else:
         parser.print_help()
 
